@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -7,7 +8,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# الأسهم الأمريكية الشهيرة
+# الأسهم المتاحة
 STOCKS = {
     "AAPL": {"name": "Apple Inc.", "emoji": "🍎"},
     "TSLA": {"name": "Tesla Inc.", "emoji": "🚗"},
@@ -15,184 +16,214 @@ STOCKS = {
     "NVDA": {"name": "NVIDIA", "emoji": "🎮"},
     "AMZN": {"name": "Amazon", "emoji": "📦"},
     "GOOGL": {"name": "Google", "emoji": "🔍"},
-    "META": {"name": "Meta (Facebook)", "emoji": "👥"},
-    "SPY": {"name": "S&P 500 ETF", "emoji": "📊"}
+    "META": {"name": "Meta", "emoji": "👤"},
+    "SPY": {"name": "S&P 500 ETF", "emoji": "📊"},
+    "QQQ": {"name": "NASDAQ ETF", "emoji": "💹"}
 }
 
-# دالة البدء /start
+# دالة البدء
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يرسل رسالة ترحيبية مع أزرار"""
-    
-    # إنشاء أزرار للأسهم (صفين في كل صف سهمين)
-    keyboard = []
-    stocks_list = list(STOCKS.items())
-    
-    for i in range(0, len(stocks_list), 2):
-        row = []
-        for j in range(2):
-            if i + j < len(stocks_list):
-                symbol, info = stocks_list[i + j]
-                row.append(InlineKeyboardButton(
-                    f"{info['emoji']} {symbol}",
-                    callback_data=f"stock_{symbol}"
-                ))
-        keyboard.append(row)
-    
-    # أزرار إضافية
-    keyboard.append([
-        InlineKeyboardButton("📋 جميع الأسهم", callback_data="all_stocks"),
-        InlineKeyboardButton("❓ المساعدة", callback_data="help")
-    ])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    user = update.effective_user
-    await update.message.reply_text(
-        f"🤖 **مرحباً {user.first_name}!**\n\n"
-        "أنا بوت التحليل المالي للسوق الأمريكي 📈\n\n"
-        "**اختر سهم من القائمة:**\n"
-        "أو اكتب رمز السهم مباشرة\nمثال: `/analyze AAPL`\n\n"
-        "سأعطيك:\n"
-        "✅ معلومات السهم الأساسية\n"
-        "✅ مستويات الدعم والمقاومة\n"
-        "✅ توصية مبدئية",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-# دالة التحليل البسيطة
-def analyze_stock(symbol):
-    """تقوم بعملية تحليل بسيطة للأسهم"""
-    
-    # بيانات وهمية للبداية (بعدين نحولها لحقيقية)
-    import random
-    
-    prices = {
-        "AAPL": {"current": 185.25, "high": 190.50, "low": 182.75},
-        "TSLA": {"current": 245.80, "high": 250.25, "low": 240.50},
-        "MSFT": {"current": 375.40, "high": 380.75, "low": 370.25},
-        "NVDA": {"current": 495.60, "high": 505.25, "low": 488.75},
-        "AMZN": {"current": 152.30, "high": 155.75, "low": 150.25},
-        "GOOGL": {"current": 142.80, "high": 145.25, "low": 140.50},
-        "META": {"current": 352.90, "high": 358.75, "low": 348.25},
-        "SPY": {"current": 478.50, "high": 482.25, "low": 475.75}
-    }
-    
-    if symbol in prices:
-        price_data = prices[symbol]
-        
-        # حساب مستويات الدعم والمقاومة (بسيطة)
-        support = round(price_data["low"] * 0.99, 2)
-        resistance = round(price_data["high"] * 1.01, 2)
-        
-        # توصية مبسطة
-        current = price_data["current"]
-        avg = (price_data["high"] + price_data["low"]) / 2
-        
-        if current < avg * 0.98:
-            recommendation = "🟢 **شراء قوي** (سعر منخفض عن المتوسط)"
-        elif current < avg:
-            recommendation = "🟡 **شراء محتمل** (سعر معقول)"
-        elif current > avg * 1.02:
-            recommendation = "🔴 **انتظار** (سعر مرتفع)"
-        else:
-            recommendation = "⚪ **محايد** (راقب السوق)"
-        
-        return {
-            "success": True,
-            "name": STOCKS[symbol]["name"],
-            "symbol": symbol,
-            "current": f"${price_data['current']}",
-            "high": f"${price_data['high']}",
-            "low": f"${price_data['low']}",
-            "support": f"${support}",
-            "resistance": f"${resistance}",
-            "recommendation": recommendation,
-            "change": f"+{random.uniform(0.5, 3.2):.2f}%" if random.random() > 0.4 else f"-{random.uniform(0.3, 2.1):.2f}%"
-        }
-    
-    return {"success": False}
-
-# عرض تحليل السهم
-async def show_stock_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE, symbol=None):
-    """يعرض تحليل السهم"""
-    
-    query = update.callback_query
-    
-    if query:
-        await query.answer()
-        user_message = query.edit_message_text
-        symbol = symbol or query.data.replace("stock_", "")
-    else:
-        user_message = update.message.reply_text
-        symbol = symbol or (context.args[0] if context.args else None)
-    
-    if not symbol:
-        await user_message("⚠️ **يرجى إدخال رمز السهم**\nمثال: `/analyze AAPL`")
-        return
-    
-    symbol = symbol.upper()
-    
-    # إظهار رسالة الانتظار
-    if query:
-        await query.edit_message_text(f"⏳ **جاري تحليل {symbol}...**")
-    else:
-        await update.message.reply_text(f"⏳ **جاري تحليل {symbol}...**")
-    
-    # الحصول على التحليل
-    analysis = analyze_stock(symbol)
-    
-    if not analysis["success"]:
-        keyboard = [[InlineKeyboardButton("🔙 الرجوع للقائمة", callback_data="main_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await (query.edit_message_text if query else update.message.reply_text)(
-            f"❌ **لم أجد بيانات لـ {symbol}**\n\n"
-            f"**الرموز المتاحة:**\n" + 
-            "\n".join([f"• {s} - {STOCKS[s]['name']}" for s in STOCKS]),
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        return
-    
-    # بناء رسالة التحليل
-    message = f"📊 **{analysis['name']} ({symbol})**\n\n"
-    message += f"💰 **السعر الحالي:** {analysis['current']}\n"
-    message += f"📈 **التغير:** {analysis['change']}\n"
-    message += f"🔺 **أعلى سعر:** {analysis['high']}\n"
-    message += f"🔻 **أدنى سعر:** {analysis['low']}\n"
-    message += f"🛡️ **الدعم القوي:** {analysis['support']}\n"
-    message += f"🎯 **المقاومة القوية:** {analysis['resistance']}\n\n"
-    message += f"💡 **التوصية:** {analysis['recommendation']}\n\n"
-    message += "---\n"
-    message += "📌 *ملاحظة: هذه بيانات أولية للاختبار*\n"
-    message += "*البيانات الحقيقية قريباً إن شاء الله*"
-    
-    # أزرار التحكم
     keyboard = [
-        [InlineKeyboardButton("🔄 تحديث البيانات", callback_data=f"stock_{symbol}")],
-        [InlineKeyboardButton("📋 سهم آخر", callback_data="all_stocks")],
-        [InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="main_menu")]
+        [
+            InlineKeyboardButton(f"{STOCKS['AAPL']['emoji']} AAPL", callback_data="stock_AAPL"),
+            InlineKeyboardButton(f"{STOCKS['TSLA']['emoji']} TSLA", callback_data="stock_TSLA")
+        ],
+        [
+            InlineKeyboardButton(f"{STOCKS['MSFT']['emoji']} MSFT", callback_data="stock_MSFT"),
+            InlineKeyboardButton(f"{STOCKS['NVDA']['emoji']} NVDA", callback_data="stock_NVDA")
+        ],
+        [
+            InlineKeyboardButton(f"{STOCKS['AMZN']['emoji']} AMZN", callback_data="stock_AMZN"),
+            InlineKeyboardButton(f"{STOCKS['GOOGL']['emoji']} GOOGL", callback_data="stock_GOOGL")
+        ],
+        [
+            InlineKeyboardButton("📋 كل الأسهم", callback_data="all_stocks"),
+            InlineKeyboardButton("❓ المساعدة", callback_data="help")
+        ]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    await update.message.reply_text(
+        "🤖 **أهلاً! أنا بوت التحليل المالي**\n\n"
+        f"⏰ الوقت: {datetime.now().strftime('%H:%M %d/%m/%Y')}\n\n"
+        "**اختر سهم للتحليل:**\n"
+        "أو اكتب مباشرة: /price AAPL",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
+# الحصول على بيانات السهم الحقيقية
+def get_real_stock_data(symbol):
+    try:
+        import yfinance as yf
+        
+        # جلب البيانات
+        stock = yf.Ticker(symbol)
+        info = stock.info
+        
+        # إذا ما في بيانات، استخدم تاريخ اليوم
+        hist = stock.history(period="1d")
+        
+        if hist.empty:
+            # جلب بيانات اليوم من معلومات السهم
+            current_price = info.get('currentPrice', 
+                          info.get('regularMarketPrice', 
+                          info.get('previousClose', 0)))
+            
+            day_high = info.get('dayHigh', current_price * 1.02)
+            day_low = info.get('dayLow', current_price * 0.98)
+            prev_close = info.get('previousClose', current_price)
+        else:
+            # استخدام البيانات التاريخية
+            current_price = hist['Close'].iloc[-1]
+            day_high = hist['High'].max()
+            day_low = hist['Low'].min()
+            prev_close = hist['Close'].iloc[0] if len(hist) > 1 else current_price
+        
+        # حساب التغير
+        change_percent = 0
+        if prev_close and prev_close > 0:
+            change_percent = ((current_price - prev_close) / prev_close) * 100
+        
+        # حساب مستويات الدعم والمقاومة (بسيطة)
+        pivot = (day_high + day_low + current_price) / 3
+        resistance1 = 2 * pivot - day_low
+        support1 = 2 * pivot - day_high
+        
+        # التوصية المبسطة
+        if change_percent > 1:
+            recommendation = "🟢 اتجاه صعودي"
+            action = "شراء على الدعم"
+        elif change_percent < -1:
+            recommendation = "🔴 اتجاه هبوطي"
+            action = "انتظار أو بيع"
+        else:
+            recommendation = "🟡 سوق جانبي"
+            action = "انتظار اختراق"
+        
+        return {
+            "success": True,
+            "name": info.get('longName', STOCKS.get(symbol, {}).get('name', symbol)),
+            "symbol": symbol,
+            "current_price": round(current_price, 2),
+            "day_high": round(day_high, 2),
+            "day_low": round(day_low, 2),
+            "change_percent": round(change_percent, 2),
+            "resistance": round(resistance1, 2),
+            "support": round(support1, 2),
+            "recommendation": recommendation,
+            "action": action,
+            "volume": info.get('volume', 0),
+            "market_cap": info.get('marketCap', 0)
+        }
+        
+    except Exception as e:
+        logger.error(f"خطأ في جلب بيانات {symbol}: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "name": STOCKS.get(symbol, {}).get('name', symbol),
+            "symbol": symbol,
+            "current_price": 0,
+            "day_high": 0,
+            "day_low": 0,
+            "change_percent": 0,
+            "resistance": 0,
+            "support": 0,
+            "recommendation": "⚠️ خطأ في البيانات",
+            "action": "حاول لاحقاً"
+        }
+
+# عرض تحليل السهم
+async def show_stock_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE, symbol):
+    query = update.callback_query
+    if query:
+        await query.answer()
+        await query.edit_message_text(f"⏳ جاري تحليل {symbol}...")
+    
+    # جلب البيانات الحقيقية
+    data = get_real_stock_data(symbol)
+    
+    if not data["success"]:
+        # بيانات وهمية إذا فشل الاتصال (للطوارئ)
+        emergency_data = {
+            "AAPL": {"price": 259.37, "change": 0.13},
+            "TSLA": {"price": 245.18, "change": -0.8},
+            "MSFT": {"price": 402.65, "change": 2.1},
+            "NVDA": {"price": 603.31, "change": 3.5},
+            "AMZN": {"price": 156.87, "change": 0.9},
+            "GOOGL": {"price": 143.25, "change": 1.2},
+            "META": {"price": 368.45, "change": 1.8},
+            "SPY": {"price": 478.32, "change": 0.5},
+            "QQQ": {"price": 426.78, "change": 0.7}
+        }
+        
+        if symbol in emergency_data:
+            em_data = emergency_data[symbol]
+            data = {
+                "success": True,
+                "name": STOCKS.get(symbol, {}).get('name', symbol),
+                "symbol": symbol,
+                "current_price": em_data["price"],
+                "day_high": em_data["price"] * 1.01,
+                "day_low": em_data["price"] * 0.99,
+                "change_percent": em_data["change"],
+                "resistance": em_data["price"] * 1.02,
+                "support": em_data["price"] * 0.98,
+                "recommendation": "⚠️ بيانات تجريبية",
+                "action": "الاتصال بالإنترنت للبيانات الحية"
+            }
+    
+    # بناء الرسالة
+    change_emoji = "📈" if data["change_percent"] >= 0 else "📉"
+    change_sign = "+" if data["change_percent"] >= 0 else ""
+    
+    message = f"📊 **{data['name']} ({symbol})**\n\n"
+    message += f"{STOCKS.get(symbol, {}).get('emoji', '💰')} **السعر الحالي**: ${data['current_price']:,.2f}\n"
+    message += f"{change_emoji} **التغير**: {change_sign}{data['change_percent']}%\n"
+    message += f"📈 **أعلى اليوم**: ${data['day_high']:,.2f}\n"
+    message += f"📉 **أدنى اليوم**: ${data['day_low']:,.2f}\n"
+    message += f"🎯 **المقاومة (R1)**: ${data['resistance']:,.2f}\n"
+    message += f"🛡️ **الدعم (S1)**: ${data['support']:,.2f}\n\n"
+    
+    message += f"💡 **التوصية**: {data['recommendation']}\n"
+    message += f"📌 **الإجراء**: {data['action']}\n\n"
+    
+    # معلومات إضافية
+    if data.get('volume', 0) > 0:
+        vol_m = data['volume'] / 1_000_000
+        message += f"📊 **الحجم**: {vol_m:.1f}M سهم\n"
+    
+    if data.get('market_cap', 0) > 0:
+        market_cap_b = data['market_cap'] / 1_000_000_000
+        message += f"🏢 **القيمة السوقية**: {market_cap_b:.1f}B\n"
+    
+    message += f"\n⏰ **آخر تحديث**: {datetime.now().strftime('%H:%M')}\n"
+    message += "🔍 *للبيانات الحية، تأكد من اتصال الخادم بالإنترنت*"
+    
+    # بناء الأزرار
+    keyboard = [
+        [InlineKeyboardButton("🔄 تحديث البيانات", callback_data=f"stock_{symbol}")],
+        [InlineKeyboardButton("📋 سهم آخر", callback_data="all_stocks")],
+        [InlineKeyboardButton("🏠 الرئيسية", callback_data="main_menu")]
+    ]
+    
     if query:
         await query.edit_message_text(
             message,
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     else:
         await update.message.reply_text(
             message,
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-# عرض جميع الأسهم
+# عرض كل الأسهم
 async def show_all_stocks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يعرض قائمة بجميع الأسهم"""
     query = update.callback_query
     await query.answer()
     
@@ -200,118 +231,96 @@ async def show_all_stocks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for symbol, info in STOCKS.items():
         keyboard.append([
             InlineKeyboardButton(
-                f"{info['emoji']} {symbol} - {info['name']}",
+                f"{info['emoji']} {symbol} - {info['name']}", 
                 callback_data=f"stock_{symbol}"
             )
         ])
     
-    keyboard.append([InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="main_menu")])
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard.append([InlineKeyboardButton("🏠 الرئيسية", callback_data="main_menu")])
     
     await query.edit_message_text(
         "📋 **جميع الأسهم المتاحة:**\n\n"
-        "اختر سهم للتحليل:",
-        reply_markup=reply_markup
+        "اختر سهم للحصول على تحليل فوري:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
-
-# دالة المساعدة
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يعرض رسالة المساعدة"""
-    
-    query = update.callback_query if update.callback_query else None
-    
-    help_text = (
-        "❓ **كيفية استخدام البوت:**\n\n"
-        "1. **ابدأ بالأمر** `/start`\n"
-        "2. **اختر سهم** من القائمة\n"
-        "3. **احصل على** التحليل الفوري\n\n"
-        "🔍 **الأوامر المتاحة:**\n"
-        "• `/start` - بدء البوت\n"
-        "• `/analyze [رمز]` - تحليل سهم\n"
-        "• `/help` - هذه الرسالة\n\n"
-        "💡 **مثال:**\n"
-        "`/analyze AAPL` لتحليل Apple\n\n"
-        "📞 **الدعم:**\n"
-        "لأي استفسار، راسل المطور"
-    )
-    
-    keyboard = [[InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="main_menu")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    if query:
-        await query.edit_message_text(help_text, reply_markup=reply_markup, parse_mode='Markdown')
-    else:
-        await update.message.reply_text(help_text, reply_markup=reply_markup, parse_mode='Markdown')
 
 # معالجة الأزرار
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يتعامل مع ضغطات الأزرار"""
     query = update.callback_query
-    data = query.data
+    await query.answer()
     
-    if data == "main_menu":
+    if query.data == "main_menu":
         await start_command(update, context)
-    elif data == "all_stocks":
+    elif query.data == "all_stocks":
         await show_all_stocks(update, context)
-    elif data == "help":
+    elif query.data == "help":
         await help_command(update, context)
-    elif data.startswith("stock_"):
-        await show_stock_analysis(update, context)
-    else:
-        await query.answer("⚠️ زر غير معروف")
+    elif query.data.startswith("stock_"):
+        symbol = query.data.replace("stock_", "")
+        await show_stock_analysis(update, context, symbol)
 
-# أمر تحليل مباشر
-async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يتعامل مع أمر /analyze"""
-    await show_stock_analysis(update, context)
-
-# دالة لمعالجة الرسائل النصية
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يتعامل مع الرسائل النصية"""
-    text = update.message.text.upper().strip()
-    
-    # إذا كان النص يشبه رمز سهم
-    if text in STOCKS or (len(text) <= 5 and text.isalpha()):
-        await show_stock_analysis(update, context, text)
+# دالة المساعدة
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await query.answer()
+        await query.edit_message_text(
+            "❓ **كيف تستخدم البوت:**\n\n"
+            "1. **ابدأ بـ** /start\n"
+            "2. **اختر سهم** من القائمة\n"
+            "3. **احصل على:**\n"
+            "   • السعر الحالي\n"
+            "   • أعلى/أدنى اليوم\n"
+            "   • مستويات الدعم والمقاومة\n"
+            "   • توصية تداول\n\n"
+            "💡 **أوامر مباشرة:**\n"
+            "• /price AAPL - سعر AAPL\n"
+            "• /start - القائمة الرئيسية\n"
+            "• /help - هذه الرسالة\n\n"
+            "⚠️ **ملاحظة:**\n"
+            "• البيانات تتأخر 15-20 دقيقة\n"
+            "• التوصيات للتعليم فقط\n"
+            "• استشر مختصاً قبل الاستثمار\n\n"
+            "🔄 **لأحدث البيانات:**\n"
+            "اضغط 'تحديث البيانات'",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏠 الرئيسية", callback_data="main_menu")]
+            ])
+        )
     else:
+        await update.message.reply_text("استخدم /start للبدء")
+
+# تحليل مباشر بالأمر
+async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
         await update.message.reply_text(
-            "🤔 **لم أفهم طلبك**\n\n"
-            "جرب أحد الخيارات:\n"
-            "• استخدم `/start` للقائمة\n"
-            "• أو اكتب رمز سهم (مثل: AAPL)\n"
-            "• أو استخدم `/help` للمساعدة",
+            "⚠️ **اكتب رمز السهم**\nمثال: `/price AAPL`\n\n"
+            "الرموز الشائعة:\n"
+            "AAPL, TSLA, MSFT, NVDA, AMZN",
             parse_mode='Markdown'
         )
-
-# معالجة الأخطاء
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """يتعامل مع الأخطاء"""
-    logger.error(f"حدث خطأ: {context.error}")
+        return
     
-    if update and update.message:
-        await update.message.reply_text(
-            "⚠️ **حدث خطأ غير متوقع**\n"
-            "يرجى المحاولة مرة أخرى لاحقاً."
-        )
+    symbol = context.args[0].upper().strip()
+    
+    if symbol not in STOCKS and len(symbol) <= 5:
+        # إذا الرمز جديد، نضيفه مؤقتاً
+        STOCKS[symbol] = {"name": symbol, "emoji": "💰"}
+    
+    await show_stock_analysis(update, context, symbol)
 
 # الدالة الرئيسية
 def main():
-    """بدء تشغيل البوت"""
-    
     # الحصول على التوكن من متغير البيئة
     TOKEN = os.environ.get('BOT_TOKEN')
     
     if not TOKEN:
-        logger.error("❌ **BOT_TOKEN غير موجود!**")
+        logger.error("❌ BOT_TOKEN غير موجود!")
         print("=" * 50)
-        print("⚠️  خطأ: يجب إضافة متغير البيئة BOT_TOKEN")
-        print("=" * 50)
-        print("\n📋 **خطوات الحل:**")
-        print("1. احصل على توكن من @BotFather")
-        print("2. على Render: Environment → Add Environment Variable")
-        print("3. Key: BOT_TOKEN")
-        print("4. Value: التوكن الخاص بك")
+        print("خطأ: يجب إضافة BOT_TOKEN في Environment Variables")
+        print("على Render: Environment > Add Variable")
+        print("Key: BOT_TOKEN")
+        print("Value: توكن_البوت_من_@BotFather")
         print("=" * 50)
         return
     
@@ -319,41 +328,28 @@ def main():
         # إنشاء التطبيق
         app = Application.builder().token(TOKEN).build()
         
-        # إضافة handlers
+        # إضافة الأوامر
         app.add_handler(CommandHandler("start", start_command))
-        app.add_handler(CommandHandler("analyze", analyze_command))
         app.add_handler(CommandHandler("help", help_command))
+        app.add_handler(CommandHandler("price", price_command))
         
         # معالجة الأزرار
         app.add_handler(CallbackQueryHandler(button_handler))
         
-        # معالجة الرسائل النصية
-        from telegram.ext import MessageHandler, filters
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-        
-        # معالجة الأخطاء
-        app.add_error_handler(error_handler)
-        
-        logger.info("🚀 **بدء تشغيل البوت...**")
+        # بدء التشغيل
+        logger.info("🚀 بدء تشغيل البوت...")
         print("=" * 50)
-        print("✅ **البوت يعمل بنجاح!**")
-        print("=" * 50)
-        print("\n📱 **كيفية الاستخدام:**")
-        print("1. ابحث عن البوت في تلجرام")
-        print("2. أرسل /start")
-        print("3. اختر سهم للتحليل")
+        print("✅ البوت يعمل بنجاح!")
+        print(f"⏰ وقت البدء: {datetime.now().strftime('%H:%M:%S')}")
+        print(f"📊 الأسهم المتاحة: {', '.join(STOCKS.keys())}")
+        print("💡 ابدأ بتلجرام: /start")
         print("=" * 50)
         
-        # بدء الاستماع للرسائل
-        app.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES
-        )
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
         
     except Exception as e:
-        logger.error(f"❌ **فشل تشغيل البوت:** {e}")
-        print(f"\n❌ **الخطأ:** {e}")
+        logger.error(f"❌ فشل تشغيل البوت: {e}")
+        print(f"❌ خطأ: {e}")
 
-# تشغيل البوت
 if __name__ == '__main__':
     main()
